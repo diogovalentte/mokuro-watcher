@@ -12,7 +12,7 @@ Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Ka
 
 - A cada `SCAN_INTERVAL_SECONDS` varre a biblioteca. Um `.cbz` entra na fila se estiver parado há `MIN_AGE_SECONDS` e se o `<Web>` do `ComicInfo.xml` for de um dos `SOURCES`.
 - Na **primeira execução** tudo o que já existe é registrado e ignorado: só capítulos baixados depois são processados.
-- Um capítulo por vez, com `nice 19`. O `.cbz` publicado é um hardlink (não ocupa espaço); o `.mokuro` é movido antes do `.cbz`, então o reader nunca lista um volume sem OCR.
+- Um capítulo por vez. O `.cbz` publicado é um hardlink (não ocupa espaço); o `.mokuro` é movido antes do `.cbz`, então o reader nunca lista um volume sem OCR.
 - Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
 - `.cbz` apagado da biblioteca → o par publicado é apagado também.
 - Redownload (mtime/size mudou) → reprocessa.

@@ -41,7 +41,7 @@ class Config:
             mokuro_command=tuple(
                 env.get(
                     "MOKURO_COMMAND",
-                    "nice -n 19 mokuro --disable_confirmation=True --legacy_html=False",
+                    "mokuro --disable_confirmation=True --legacy_html=False",
                 ).split()
             ),
             ntfy_url=env.get("NTFY_URL", "").rstrip("/"),
