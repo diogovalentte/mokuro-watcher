@@ -1,7 +1,11 @@
 FROM python:3.11-slim
 
+# opencv-python needs X11 libraries the slim image lacks; the headless build is the same API without them.
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir mokuro==0.2.5
+    && pip install --no-cache-dir mokuro==0.2.5 \
+    && pip uninstall -y opencv-python \
+    && pip install --no-cache-dir opencv-python-headless \
+    && python -c "import cv2, mokuro.manga_page_ocr"
 
 # The OCR models (~900 MB) are downloaded on the first run into this volume, not baked into the image.
 ENV HOME=/cache \
