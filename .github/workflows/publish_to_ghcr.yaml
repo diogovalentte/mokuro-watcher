@@ -1,0 +1,79 @@
+name: Create and publish a container image
+
+on:
+  push:
+    tags:
+      - "*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install pytest && pytest -q
+
+  build-and-publish:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GH_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: false
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Create payload file
+        id: create-payload
+        run: |
+          REPO_FULL="${{ github.repository }}"
+          REPO_NAME="${REPO_FULL##*/}"
+          echo "{\"repository\": {\"name\": \"${REPO_NAME}\"}}" > payload.json
+
+      - name: Send GitHub webhook
+        env:
+          WEBHOOK_SERVER: ${{ secrets.WEBHOOK_SERVER }}
+          WEBHOOK_SERVER_SECRET: ${{ secrets.WEBHOOK_SERVER_SECRET }}
+          EVENT: push
+          PAYLOAD_FILE: payload.json
+        run: |
+          SIG="sha256=$(openssl dgst -sha256 -hmac "$WEBHOOK_SERVER_SECRET" "$PAYLOAD_FILE" | sed 's/^.* //')"
+          DELIVERY_ID=$(uuidgen)
+          curl -X POST "$WEBHOOK_SERVER" \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIG" \
+            -H "X-GitHub-Event: $EVENT" \
+            -H "X-GitHub-Delivery: $DELIVERY_ID" \
+            --data-binary "@$PAYLOAD_FILE"
