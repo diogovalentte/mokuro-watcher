@@ -46,7 +46,7 @@ class Config:
                     "mokuro --disable_confirmation=True --legacy_html=False",
                 ).split()
             ),
-            ntfy_url=env.get("NTFY_URL", "").rstrip("/"),
+            ntfy_url=env.get("NTFY_ADDRESS", "").rstrip("/"),
             ntfy_topic=env.get("NTFY_TOPIC", ""),
             ntfy_token=env.get("NTFY_TOKEN", ""),
         )

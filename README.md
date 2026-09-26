@@ -34,7 +34,7 @@ Pastas começando com `.` na biblioteca são ignoradas.
 | `SERIES_BASELINE_SECONDS` | `21600` (6h) |
 | `MAX_ATTEMPTS` | `3` |
 | `MOKURO_TIMEOUT_SECONDS` | `7200` |
-| `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | vazio (sem aviso) |
+| `NTFY_ADDRESS`, `NTFY_TOPIC`, `NTFY_TOKEN` | vazio (sem aviso) |
 
 `OUTPUT_DIR` e `STAGING_DIR` precisam estar no mesmo filesystem da biblioteca (hardlink).
 
