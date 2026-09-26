@@ -12,6 +12,7 @@ Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Ka
 
 - A cada `SCAN_INTERVAL_SECONDS` varre a biblioteca. Um `.cbz` entra na fila se estiver parado há `MIN_AGE_SECONDS` e se o `<Web>` do `ComicInfo.xml` for de um dos `SOURCES`.
 - Na **primeira execução** tudo o que já existe é registrado e ignorado: só capítulos baixados depois são processados.
+- **Série nova** na biblioteca: o download inicial é ignorado do mesmo jeito. Os capítulos que chegam são registrados sem processar até passar `SERIES_BASELINE_SECONDS` sem nenhum capítulo novo nela; daí em diante cada capítulo novo é processado. Pra processar o acervo inicial também, use `force`.
 - Um capítulo por vez. O `.cbz` publicado é um hardlink (não ocupa espaço); o `.mokuro` é movido antes do `.cbz`, então o reader nunca lista um volume sem OCR.
 - Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
 - `.cbz` apagado da biblioteca → o par publicado é apagado também.
@@ -30,6 +31,7 @@ Pastas começando com `.` na biblioteca são ignoradas.
 | `SOURCES` | `klmanga,rawkuma,jmanga` |
 | `SCAN_INTERVAL_SECONDS` | `300` |
 | `MIN_AGE_SECONDS` | `120` |
+| `SERIES_BASELINE_SECONDS` | `21600` (6h) |
 | `MAX_ATTEMPTS` | `3` |
 | `MOKURO_TIMEOUT_SECONDS` | `7200` |
 | `NTFY_URL`, `NTFY_TOPIC`, `NTFY_TOKEN` | vazio (sem aviso) |
@@ -43,7 +45,7 @@ Volumes: `/cache` guarda os modelos do OCR (~900 MB, baixados na primeira execu�
 ```bash
 mokuro-watcher run            # loop (padrão)
 mokuro-watcher once           # uma varredura e sai
-mokuro-watcher force <Série>  # enfileira o acervo antigo de uma série
+mokuro-watcher force <Série>  # enfileira o acervo antigo de uma série (e encerra a janela de série nova)
 ```
 
 Dentro do container: `docker exec mokuro-watcher mokuro-watcher force Skip_to_Loafer`.

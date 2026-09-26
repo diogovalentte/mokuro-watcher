@@ -48,6 +48,13 @@ RAW = "https://klmanga.town/manga-raw/x/chapter-1"
 EN = "https://mangadex.org/chapter/abc"
 
 
+def start(config, registry, library):
+    """First run over a library that already has the Raw and En series."""
+    make_cbz(library, "Raw/[0000]_Chapter_0.cbz", RAW)
+    make_cbz(library, "En/[0000]_Chapter_0.cbz", EN)
+    sync_library(config, registry)
+
+
 def test_source_filter(tmp_path):
     raw = make_cbz(tmp_path, "A/[0001]_Chapter_1.cbz", RAW)
     en = make_cbz(tmp_path, "B/[0001]_Chapter_1.cbz", EN)
@@ -89,7 +96,7 @@ def test_first_run_is_baseline_only(env):
 
 def test_new_raw_chapter_is_published(env):
     config, registry, library = env
-    sync_library(config, registry)
+    start(config, registry, library)
     make_cbz(library, "Raw/[0002]_Chapter_2.cbz", RAW)
     make_cbz(library, "En/[0002]_Chapter_2.cbz", EN)
 
@@ -110,7 +117,7 @@ def test_new_raw_chapter_is_published(env):
 
 def test_output_and_staging_are_not_scanned(env):
     config, registry, library = env
-    sync_library(config, registry)
+    start(config, registry, library)
     make_cbz(library, "Raw/[0002]_Chapter_2.cbz", RAW)
     sync_library(config, registry)
     process_pending(config, registry)
@@ -118,12 +125,16 @@ def test_output_and_staging_are_not_scanned(env):
     sync_library(config, registry)
 
     paths = {c.path for c in registry.all()}
-    assert paths == {"Raw/[0002]_Chapter_2.cbz"}
+    assert paths == {
+        "Raw/[0000]_Chapter_0.cbz",
+        "En/[0000]_Chapter_0.cbz",
+        "Raw/[0002]_Chapter_2.cbz",
+    }
 
 
 def test_chapter_still_being_written_waits(env):
     config, registry, library = env
-    sync_library(config, registry)
+    start(config, registry, library)
     make_cbz(library, "Raw/[0003]_Chapter_3.cbz", RAW, mtime=time.time())
 
     sync_library(config, registry)
@@ -137,7 +148,7 @@ def test_failure_retries_then_gives_up(env, monkeypatch):
     config, registry, library = env
     notes = []
     monkeypatch.setattr("mokuro_watcher.watcher.notify", lambda *a: notes.append(a))
-    sync_library(config, registry)
+    start(config, registry, library)
     make_cbz(library, "Raw/[0004]_fail.cbz", RAW)
     sync_library(config, registry)
 
@@ -155,7 +166,7 @@ def test_failure_retries_then_gives_up(env, monkeypatch):
 
 def test_removed_chapter_is_unpublished(env):
     config, registry, library = env
-    sync_library(config, registry)
+    start(config, registry, library)
     src = make_cbz(library, "Raw/[0005]_Chapter_5.cbz", RAW)
     sync_library(config, registry)
     process_pending(config, registry)
@@ -171,7 +182,7 @@ def test_removed_chapter_is_unpublished(env):
 
 def test_redownloaded_chapter_is_reprocessed(env):
     config, registry, library = env
-    sync_library(config, registry)
+    start(config, registry, library)
     make_cbz(library, "Raw/[0006]_Chapter_6.cbz", RAW)
     sync_library(config, registry)
     process_pending(config, registry)
@@ -195,3 +206,61 @@ def test_force_queues_backlog_raw_only(env):
     sync_library(config, registry)
     assert len(registry.pending()) == 2
     assert force_series(config, registry, "En") == 0
+
+
+def test_new_series_initial_download_is_skipped(env):
+    config, registry, library = env
+    start(config, registry, library)
+    window = config.series_baseline_seconds
+    now = time.time()
+
+    make_cbz(library, "Nova/[0001]_Chapter_1.cbz", RAW)
+    make_cbz(library, "Nova/[0002]_Chapter_2.cbz", RAW, mtime=now)
+    sync_library(config, registry, now=now)
+    # the download keeps going, each chapter pushes the window forward
+    make_cbz(library, "Nova/[0003]_Chapter_3.cbz", RAW)
+    sync_library(config, registry, now=now + window - 60)
+    make_cbz(library, "Nova/[0004]_Chapter_4.cbz", RAW)
+    sync_library(config, registry, now=now + 2 * window - 120)
+
+    assert registry.pending() == []
+    assert {c.status for c in registry.all() if c.path.startswith("Nova/")} == {reg.SEEN}
+
+    make_cbz(library, "Nova/[0005]_Chapter_5.cbz", RAW)
+    sync_library(config, registry, now=now + 3 * window)
+    assert [c.path for c in registry.pending()] == ["Nova/[0005]_Chapter_5.cbz"]
+
+
+def test_new_chapter_in_existing_series_is_not_a_new_series(env):
+    config, registry, library = env
+    start(config, registry, library)
+    # database from before series were tracked
+    with registry.conn:
+        registry.conn.execute("DELETE FROM series")
+
+    make_cbz(library, "Raw/[0001]_Chapter_1.cbz", RAW)
+    sync_library(config, registry)
+    assert [c.path for c in registry.pending()] == ["Raw/[0001]_Chapter_1.cbz"]
+
+
+def test_series_removed_and_added_again_is_new(env):
+    config, registry, library = env
+    start(config, registry, library)
+    (library / "Raw/[0000]_Chapter_0.cbz").unlink()
+    sync_library(config, registry)
+
+    make_cbz(library, "Raw/[0001]_Chapter_1.cbz", RAW)
+    sync_library(config, registry)
+    assert registry.pending() == []
+
+
+def test_force_ends_new_series_window(env):
+    config, registry, library = env
+    start(config, registry, library)
+    make_cbz(library, "Nova/[0001]_Chapter_1.cbz", RAW)
+    sync_library(config, registry)
+
+    assert force_series(config, registry, "Nova") == 1
+    make_cbz(library, "Nova/[0002]_Chapter_2.cbz", RAW)
+    sync_library(config, registry)
+    assert len(registry.pending()) == 2

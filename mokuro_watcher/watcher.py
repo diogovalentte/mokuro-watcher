@@ -15,30 +15,47 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
     """Bring the registry in line with the library.
 
     On the very first run every existing chapter becomes `seen` (or `ignored`) so only
-    chapters downloaded afterwards get processed.
+    chapters downloaded afterwards get processed. A series that shows up later gets the
+    same treatment for its initial download: its chapters are `seen` until
+    `series_baseline_seconds` pass without a new one arriving.
     """
     now = time.time() if now is None else now
     baseline = not registry.baseline_done
     files = list_cbz(config.library_dir)
     present = set()
+    series_until = registry.series_baselines()
+    known_series = {chapter.path.split("/", 1)[0] for chapter in registry.all()}
 
     for file in files:
         present.add(file.path)
+        series = file.path.split("/", 1)[0]
+        if series not in series_until:
+            is_new = not baseline and series not in known_series
+            series_until[series] = now + config.series_baseline_seconds if is_new else 0
+            registry.set_series_baseline(series, series_until[series])
+            if is_new:
+                log.info("série nova: %s, download inicial ignorado", series)
+        series_baseline = series_until[series] > now
+
         known = registry.get(file.path)
         if known and known.mtime_ns == file.mtime_ns and known.size == file.size:
             continue
-        if not baseline and now - file.mtime_ns / 1e9 < config.min_age_seconds:
+        settling = baseline or series_baseline
+        if not settling and now - file.mtime_ns / 1e9 < config.min_age_seconds:
             continue  # probably still being written by mangal
         raw = is_raw_source(config.library_dir / file.path, config.sources)
         if not raw:
             status = reg.IGNORED
-        elif baseline:
+        elif settling:
             status = reg.SEEN
         else:
             status = reg.PENDING
         if known and known.status == reg.DONE and status != reg.PENDING:
             unpublish_chapter(file.path, config.output_dir)
         registry.upsert(file.path, file.mtime_ns, file.size, status)
+        if series_baseline:
+            series_until[series] = now + config.series_baseline_seconds
+            registry.set_series_baseline(series, series_until[series])
         if status == reg.PENDING:
             log.info("capítulo novo: %s", file.path)
 
@@ -49,6 +66,11 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
             unpublish_chapter(chapter.path, config.output_dir)
             log.info("capítulo removido da biblioteca, despublicado: %s", chapter.path)
         registry.delete(chapter.path)
+
+    present_series = {path.split("/", 1)[0] for path in present}
+    for series in series_until:
+        if series not in present_series:
+            registry.delete_series(series)
 
     if baseline:
         registry.mark_baseline_done()
@@ -88,10 +110,14 @@ def process_pending(config: Config, registry: reg.Registry) -> int:
 
 
 def force_series(config: Config, registry: reg.Registry, series: str) -> int:
-    """Queue every raw chapter of a series, including ones from before the baseline."""
+    """Queue every raw chapter of a series, including ones from before the baseline.
+
+    Also ends the series' initial download window, so the rest of it gets processed too.
+    """
     series_dir = config.library_dir / series
     if not series_dir.is_dir():
         raise SystemExit(f"série não encontrada: {series_dir}")
+    registry.set_series_baseline(series, 0)
     queued = 0
     for file in list_cbz(config.library_dir):
         if not file.path.startswith(f"{series}/"):

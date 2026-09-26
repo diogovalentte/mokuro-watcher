@@ -12,6 +12,7 @@ class Config:
     sources: tuple[str, ...]
     scan_interval_seconds: int
     min_age_seconds: int
+    series_baseline_seconds: int
     max_attempts: int
     mokuro_timeout_seconds: int
     mokuro_command: tuple[str, ...]
@@ -36,6 +37,7 @@ class Config:
             sources=sources,
             scan_interval_seconds=int(env.get("SCAN_INTERVAL_SECONDS", "300")),
             min_age_seconds=int(env.get("MIN_AGE_SECONDS", "120")),
+            series_baseline_seconds=int(env.get("SERIES_BASELINE_SECONDS", "21600")),
             max_attempts=int(env.get("MAX_ATTEMPTS", "3")),
             mokuro_timeout_seconds=int(env.get("MOKURO_TIMEOUT_SECONDS", "7200")),
             mokuro_command=tuple(

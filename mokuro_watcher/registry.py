@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS chapters (
     last_error TEXT,
     updated_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS series (
+    name TEXT PRIMARY KEY,
+    baseline_until REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -58,6 +62,21 @@ class Registry:
                 "INSERT OR REPLACE INTO meta (key, value) VALUES ('baseline_done', ?)",
                 (str(time.time()),),
             )
+
+    def series_baselines(self) -> dict[str, float]:
+        """Series name -> time until which new chapters of it are still the initial download."""
+        return dict(self.conn.execute("SELECT name, baseline_until FROM series").fetchall())
+
+    def set_series_baseline(self, name: str, until: float) -> None:
+        with self.conn:
+            self.conn.execute(
+                "INSERT OR REPLACE INTO series (name, baseline_until) VALUES (?, ?)",
+                (name, until),
+            )
+
+    def delete_series(self, name: str) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM series WHERE name = ?", (name,))
 
     def get(self, path: str) -> Chapter | None:
         row = self.conn.execute("SELECT * FROM chapters WHERE path = ?", (path,)).fetchone()
