@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 import time
@@ -9,6 +10,7 @@ import pytest
 from mokuro_watcher import registry as reg
 from mokuro_watcher.config import Config
 from mokuro_watcher.library import is_raw_source, source_host
+from mokuro_watcher.processor import fix_published_titles, series_title_uuid
 from mokuro_watcher.watcher import force_series, process_pending, sync_library
 
 FAKE_MOKURO = (sys.executable, str(Path(__file__).parent / "fake_mokuro.py"))
@@ -264,3 +266,38 @@ def test_force_ends_new_series_window(env):
     make_cbz(library, "Nova/[0002]_Chapter_2.cbz", RAW)
     sync_library(config, registry)
     assert len(registry.pending()) == 2
+
+
+def test_published_mokuro_is_named_after_the_series(env):
+    config, registry, library = env
+    start(config, registry, library)
+    make_cbz(library, "あさドラ！/[0001]_Chapter_1.cbz", RAW)
+    make_cbz(library, "あさドラ！/[0002]_Chapter_2.cbz", RAW)
+    force_series(config, registry, "あさドラ！")
+    sync_library(config, registry)
+    process_pending(config, registry)
+
+    out = config.output_dir / "あさドラ！"
+    first, second = (
+        json.loads((out / f"{stem}.mokuro").read_text(encoding="utf-8"))
+        for stem in ("[0001]_Chapter_1", "[0002]_Chapter_2")
+    )
+    assert first["title"] == second["title"] == "あさドラ！"
+    assert first["title_uuid"] == second["title_uuid"] == series_title_uuid("あさドラ！")
+    assert first["volume_uuid"] != second["volume_uuid"]
+    assert first["pages"] == [{"blocks": [{"lines": ["日本語"]}]}]
+
+
+def test_fix_published_titles(env):
+    config, _, _ = env
+    out = config.output_dir / "Raw"
+    out.mkdir(parents=True)
+    wrong = {"title": "[0001]_Chapter_1", "title_uuid": "x", "volume_uuid": "v", "pages": []}
+    (out / "[0001]_Chapter_1.mokuro").write_text(json.dumps(wrong))
+    (config.output_dir / "volume-data.json").write_text("{}")
+
+    assert fix_published_titles(config.output_dir) == 1
+    fixed = json.loads((out / "[0001]_Chapter_1.mokuro").read_text())
+    assert fixed == {**wrong, "title": "Raw", "title_uuid": series_title_uuid("Raw")}
+    assert (config.output_dir / "volume-data.json").read_text() == "{}"
+    assert fix_published_titles(config.output_dir) == 0

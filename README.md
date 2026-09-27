@@ -13,6 +13,7 @@ Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Ka
 - A cada `SCAN_INTERVAL_SECONDS` varre a biblioteca. Um `.cbz` entra na fila se estiver parado há `MIN_AGE_SECONDS` e se o `<Web>` do `ComicInfo.xml` for de um dos `SOURCES`.
 - Na **primeira execução** tudo o que já existe é registrado e ignorado: só capítulos baixados depois são processados.
 - **Série nova** na biblioteca: o download inicial é ignorado do mesmo jeito. Os capítulos que chegam são registrados sem processar até passar `SERIES_BASELINE_SECONDS` sem nenhum capítulo novo nela; daí em diante cada capítulo novo é processado. Pra processar o acervo inicial também, use `force`.
+- O mokuro tira o título da série da pasta onde o `.cbz` está, que no staging é a do capítulo. Antes de publicar, o `.mokuro` recebe `title` = nome da pasta da série e `title_uuid` = `uuid5` fixo desse nome, pra todos os capítulos caírem na mesma série no reader.
 - Um capítulo por vez. O `.cbz` publicado é um hardlink (não ocupa espaço); o `.mokuro` é movido antes do `.cbz`, então o reader nunca lista um volume sem OCR.
 - Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
 - `.cbz` apagado da biblioteca → o par publicado é apagado também.
@@ -46,6 +47,7 @@ Volumes: `/cache` guarda os modelos do OCR (~900 MB, baixados na primeira execu�
 mokuro-watcher run            # loop (padrão)
 mokuro-watcher once           # uma varredura e sai
 mokuro-watcher force <Série>  # enfileira o acervo antigo de uma série (e encerra a janela de série nova)
+mokuro-watcher fix-titles     # corrige título/title_uuid dos .mokuro já publicados (idempotente)
 ```
 
 Dentro do container: `docker exec mokuro-watcher mokuro-watcher force Skip_to_Loafer`.
