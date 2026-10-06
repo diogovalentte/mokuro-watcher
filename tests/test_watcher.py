@@ -301,3 +301,126 @@ def test_fix_published_titles(env):
     assert fixed == {**wrong, "title": "Raw", "title_uuid": series_title_uuid("Raw")}
     assert (config.output_dir / "volume-data.json").read_text() == "{}"
     assert fix_published_titles(config.output_dir) == 0
+
+
+def publish(config, registry, library, rel):
+    make_cbz(library, rel, RAW)
+    sync_library(config, registry)
+    process_pending(config, registry)
+    assert registry.get(rel).status == reg.DONE
+
+
+def readd_from_other_source(library, rels):
+    """Kaizoku deleting the series and downloading it again: same names, new files."""
+    for rel in rels:
+        (library / rel).unlink(missing_ok=True)
+        make_cbz(library, rel, RAW, mtime=OLD + 60)
+
+
+def test_burst_in_known_series_is_an_initial_download(env):
+    config, registry, library = env
+    start(config, registry, library)
+    publish(config, registry, library, "Raw/[0001]_Chapter_1.cbz")
+    rels = [f"Raw/[000{i}]_Chapter_{i}.cbz" for i in range(1, 6)]
+
+    readd_from_other_source(library, rels)
+    sync_library(config, registry)
+
+    assert registry.pending() == []
+    assert registry.get("Raw/[0005]_Chapter_5.cbz").status == reg.SEEN
+    # the pair made from the old download is still consistent, so it stays
+    published = config.output_dir / "Raw/[0001]_Chapter_1.cbz"
+    assert registry.get("Raw/[0001]_Chapter_1.cbz").status == reg.DONE
+    assert published.with_suffix(".mokuro").is_file()
+    assert published.stat().st_ino != (library / rels[0]).stat().st_ino
+
+    make_cbz(library, "Raw/[0006]_Chapter_6.cbz", RAW)
+    sync_library(config, registry, now=time.time() + 2 * config.series_baseline_seconds)
+    assert [c.path for c in registry.pending()] == ["Raw/[0006]_Chapter_6.cbz"]
+
+
+def test_burst_counts_chapters_still_being_written(env):
+    config, registry, library = env
+    start(config, registry, library)
+    now = time.time()
+    for i in range(1, 6):
+        make_cbz(library, f"Raw/[000{i}]_Chapter_{i}.cbz", RAW, mtime=now)
+
+    sync_library(config, registry, now=now)
+    sync_library(config, registry, now=now + 600)
+
+    assert registry.pending() == []
+
+
+def test_few_new_chapters_in_known_series_are_processed(env):
+    config, registry, library = env
+    start(config, registry, library)
+    for i in range(1, 5):
+        make_cbz(library, f"Raw/[000{i}]_Chapter_{i}.cbz", RAW)
+
+    sync_library(config, registry)
+    assert len(registry.pending()) == 4
+
+
+def test_burst_unpublishes_chapter_rewritten_in_place(env):
+    config, registry, library = env
+    start(config, registry, library)
+    publish(config, registry, library, "Raw/[0001]_Chapter_1.cbz")
+
+    # zipfile truncates the existing file, so the published hardlink changes with it
+    for i in range(1, 6):
+        make_cbz(library, f"Raw/[000{i}]_Chapter_{i}.cbz", RAW, mtime=OLD + 60)
+    sync_library(config, registry)
+
+    assert registry.get("Raw/[0001]_Chapter_1.cbz").status == reg.SEEN
+    assert not (config.output_dir / "Raw").exists()
+
+
+def test_burst_waits_for_half_written_chapter_before_judging_it(env):
+    config, registry, library = env
+    start(config, registry, library)
+    publish(config, registry, library, "Raw/[0001]_Chapter_1.cbz")
+    now = time.time()
+
+    # still downloading: no ComicInfo.xml yet, which reads as a non-raw chapter
+    readd_from_other_source(library, [f"Raw/[000{i}]_Chapter_{i}.cbz" for i in range(2, 6)])
+    (library / "Raw/[0001]_Chapter_1.cbz").unlink()
+    make_cbz(library, "Raw/[0001]_Chapter_1.cbz", None, mtime=now)
+    sync_library(config, registry, now=now)
+
+    assert registry.get("Raw/[0001]_Chapter_1.cbz").status == reg.DONE
+    assert (config.output_dir / "Raw/[0001]_Chapter_1.mokuro").is_file()
+
+
+def test_queue_of_series_in_burst_waits_for_the_window(env):
+    config, registry, library = env
+    start(config, registry, library)
+    make_cbz(library, "Raw/[0001]_fail.cbz", RAW)
+    sync_library(config, registry)
+    process_pending(config, registry)
+    assert registry.get("Raw/[0001]_fail.cbz").status == reg.PENDING
+
+    readd_from_other_source(library, [f"Raw/[000{i}]_Chapter_{i}.cbz" for i in range(2, 7)])
+    sync_library(config, registry)
+    assert process_pending(config, registry) == 0
+    assert registry.get("Raw/[0001]_fail.cbz").attempts == 1
+
+    later = time.time() + 2 * config.series_baseline_seconds
+    process_pending(config, registry, now=later)
+    assert registry.get("Raw/[0001]_fail.cbz").status == reg.FAILED
+
+
+def test_chapter_still_being_written_keeps_the_window_open(env):
+    config, registry, library = env
+    start(config, registry, library)
+    window = config.series_baseline_seconds
+    now = time.time()
+    make_cbz(library, "Nova/[0001]_Chapter_1.cbz", RAW)
+    sync_library(config, registry, now=now)
+
+    arrival = now + window - 10
+    make_cbz(library, "Nova/[0002]_Chapter_2.cbz", RAW, mtime=arrival)
+    sync_library(config, registry, now=arrival)
+    sync_library(config, registry, now=arrival + 300)
+
+    assert registry.pending() == []

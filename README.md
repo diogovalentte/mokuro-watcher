@@ -18,6 +18,7 @@ Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Ka
 - Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
 - `.cbz` apagado da biblioteca → o par publicado é apagado também.
 - Redownload (mtime/size mudou) → reprocessa.
+- **Rajada** numa série conhecida (`SERIES_BURST_THRESHOLD` capítulos novos ou alterados na mesma varredura, como quando a série é apagada e adicionada de novo no Kaizoku por outra source) → tratada como série nova: nada é processado até passar `SERIES_BASELINE_SECONDS` sem capítulo novo. Capítulo já publicado mantém o par antigo, que continua consistente porque o `.cbz` publicado ainda aponta pro arquivo antigo; só é despublicado se o arquivo foi sobrescrito no lugar (mesmo inode).
 
 Pastas começando com `.` na biblioteca são ignoradas.
 
@@ -33,6 +34,7 @@ Pastas começando com `.` na biblioteca são ignoradas.
 | `SCAN_INTERVAL_SECONDS` | `300` |
 | `MIN_AGE_SECONDS` | `120` |
 | `SERIES_BASELINE_SECONDS` | `21600` (6h) |
+| `SERIES_BURST_THRESHOLD` | `5` |
 | `MAX_ATTEMPTS` | `3` |
 | `MOKURO_TIMEOUT_SECONDS` | `7200` |
 | `NTFY_ADDRESS`, `NTFY_TOPIC`, `NTFY_TOKEN` | vazio (sem aviso) |

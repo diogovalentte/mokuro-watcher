@@ -4,7 +4,7 @@ from pathlib import Path
 
 from . import registry as reg
 from .config import Config
-from .library import is_raw_source, list_cbz
+from .library import LibraryFile, is_raw_source, list_cbz
 from .notify import notify
 from .processor import ProcessingError, process_chapter, unpublish_chapter
 
@@ -17,7 +17,10 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
     On the very first run every existing chapter becomes `seen` (or `ignored`) so only
     chapters downloaded afterwards get processed. A series that shows up later gets the
     same treatment for its initial download: its chapters are `seen` until
-    `series_baseline_seconds` pass without a new one arriving.
+    `series_baseline_seconds` pass without a new one arriving. So does a known series
+    that gets `series_burst_threshold` new or changed chapters in one scan, which is what
+    re-adding it in Kaizoku from another source looks like. A chapter already published
+    keeps its pair through that window, unless its file was rewritten in place.
     """
     now = time.time() if now is None else now
     baseline = not registry.baseline_done
@@ -25,6 +28,9 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
     present = set()
     series_until = registry.series_baselines()
     known_series = {chapter.path.split("/", 1)[0] for chapter in registry.all()}
+
+    if not baseline:
+        _open_burst_windows(config, registry, files, series_until, known_series, now)
 
     for file in files:
         present.add(file.path)
@@ -41,7 +47,10 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
         if known and known.mtime_ns == file.mtime_ns and known.size == file.size:
             continue
         settling = baseline or series_baseline
-        if not settling and now - file.mtime_ns / 1e9 < config.min_age_seconds:
+        if series_baseline:
+            series_until[series] = now + config.series_baseline_seconds
+            registry.set_series_baseline(series, series_until[series])
+        if not baseline and now - file.mtime_ns / 1e9 < config.min_age_seconds:
             continue  # probably still being written by mangal
         raw = is_raw_source(config.library_dir / file.path, config.sources)
         if not raw:
@@ -51,11 +60,11 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
         else:
             status = reg.PENDING
         if known and known.status == reg.DONE and status != reg.PENDING:
-            unpublish_chapter(file.path, config.output_dir)
+            if status == reg.SEEN and _published_pair_intact(config, file.path):
+                status = reg.DONE
+            else:
+                unpublish_chapter(file.path, config.output_dir)
         registry.upsert(file.path, file.mtime_ns, file.size, status)
-        if series_baseline:
-            series_until[series] = now + config.series_baseline_seconds
-            registry.set_series_baseline(series, series_until[series])
         if status == reg.PENDING:
             log.info("capítulo novo: %s", file.path)
 
@@ -77,9 +86,61 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
         log.info("linha de base registrada: %d capítulos existentes ignorados", len(files))
 
 
-def process_pending(config: Config, registry: reg.Registry) -> int:
+def _open_burst_windows(
+    config: Config,
+    registry: reg.Registry,
+    files: list[LibraryFile],
+    series_until: dict[str, float],
+    known_series: set[str],
+    now: float,
+) -> None:
+    """Treat a burst of new or changed chapters in a known series as an initial download.
+
+    Counts files still being written too: the download spans several scans, and those are
+    skipped this time anyway, so the window has to be open before the first one settles.
+    """
+    changed: dict[str, int] = {}
+    for file in files:
+        series = file.path.split("/", 1)[0]
+        if series not in known_series or series_until.get(series, 0) > now:
+            continue
+        known = registry.get(file.path)
+        if known and known.mtime_ns == file.mtime_ns and known.size == file.size:
+            continue
+        changed[series] = changed.get(series, 0) + 1
+    for series, count in changed.items():
+        if count >= config.series_burst_threshold:
+            series_until[series] = now + config.series_baseline_seconds
+            registry.set_series_baseline(series, series_until[series])
+            log.info("rajada em %s: %d capítulos, tratada como download inicial", series, count)
+
+
+def _published_pair_intact(config: Config, rel_path: str) -> bool:
+    """Whether the published pair still holds the images its .mokuro was made from.
+
+    The published .cbz is a hardlink, so a file rewritten in place changed it too; one
+    deleted and downloaded again left the published link on the old inode.
+    """
+    series, filename = rel_path.split("/", 1)
+    published = config.output_dir / series / filename
+    try:
+        published_ino = published.stat().st_ino
+    except FileNotFoundError:
+        return False
+    return (
+        published.with_suffix(".mokuro").is_file()
+        and published_ino != (config.library_dir / rel_path).stat().st_ino
+    )
+
+
+def process_pending(config: Config, registry: reg.Registry, now: float | None = None) -> int:
+    """Process the queue, holding back series whose initial download window is open."""
+    now = time.time() if now is None else now
+    held = {name for name, until in registry.series_baselines().items() if until > now}
     processed = 0
     for chapter in registry.pending():
+        if chapter.path.split("/", 1)[0] in held:
+            continue
         log.info("processando %s", chapter.path)
         started = time.monotonic()
         try:
