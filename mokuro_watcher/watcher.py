@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 
 from . import registry as reg
+from .api import start_api
 from .config import Config
 from .library import LibraryFile, is_raw_source, list_cbz
 from .notify import notify
@@ -141,6 +142,9 @@ def process_pending(config: Config, registry: reg.Registry, now: float | None = 
     for chapter in registry.pending():
         if chapter.path.split("/", 1)[0] in held:
             continue
+        current = registry.get(chapter.path)
+        if current is None or current.status != reg.PENDING:
+            continue  # imported through the API while earlier chapters were processing
         log.info("processando %s", chapter.path)
         started = time.monotonic()
         try:
@@ -191,6 +195,9 @@ def force_series(config: Config, registry: reg.Registry, series: str) -> int:
 
 
 def run_forever(config: Config, registry: reg.Registry) -> None:
+    if config.api_port:
+        start_api(config, config.api_port)
+        log.info("API ouvindo na porta %d", config.api_port)
     while True:
         try:
             sync_library(config, registry)

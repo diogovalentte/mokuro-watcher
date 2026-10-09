@@ -19,5 +19,6 @@ COPY mokuro_watcher ./mokuro_watcher
 RUN pip install --no-cache-dir --no-deps .
 
 VOLUME ["/cache", "/state"]
+EXPOSE 8000
 ENTRYPOINT ["mokuro-watcher"]
 CMD ["run"]

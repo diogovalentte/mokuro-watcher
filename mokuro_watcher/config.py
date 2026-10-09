@@ -20,6 +20,7 @@ class Config:
     ntfy_url: str
     ntfy_topic: str
     ntfy_token: str
+    api_port: int
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Config":
@@ -51,4 +52,5 @@ class Config:
             ntfy_url=env.get("NTFY_ADDRESS", "").rstrip("/"),
             ntfy_topic=env.get("NTFY_TOPIC", ""),
             ntfy_token=env.get("NTFY_TOKEN", ""),
+            api_port=int(env.get("API_PORT", "8000") or 0),
         )

@@ -73,15 +73,17 @@ def set_series_title(path_mokuro: Path, series: str) -> bool:
     changed.
     """
     data = json.loads(path_mokuro.read_text(encoding="utf-8"))
-    title_uuid = series_title_uuid(series)
-    if data.get("title") == series and data.get("title_uuid") == title_uuid:
+    fixed = with_series_title(data, series)
+    if fixed == data:
         return False
-    data["title"] = series
-    data["title_uuid"] = title_uuid
     tmp = path_mokuro.with_name(path_mokuro.name + ".tmp")
-    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    tmp.write_text(json.dumps(fixed, ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, path_mokuro)
     return True
+
+
+def with_series_title(data: dict, series: str) -> dict:
+    return {**data, "title": series, "title_uuid": series_title_uuid(series)}
 
 
 def fix_published_titles(output_dir: Path) -> int:
