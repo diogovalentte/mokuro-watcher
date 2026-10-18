@@ -7,6 +7,8 @@ from pathlib import Path
 
 # Fixed namespace so every run, and every chapter, derives the same title_uuid for a series.
 TITLE_UUID_NAMESPACE = uuid.UUID("6f1d6c2e-3b0a-4f5e-9a57-2d6b8f4c1e90")
+# What the mokuro-reader recognizes as a cover sidecar.
+COVER_EXTENSIONS = (".webp", ".jpg", ".jpeg")
 
 
 class ProcessingError(Exception):
@@ -54,6 +56,7 @@ def process_chapter(
 
         target_dir = output_dir / series
         target_dir.mkdir(parents=True, exist_ok=True)
+        remove_covers(target_dir, stem)
         os.replace(staged_mokuro, target_dir / f"{stem}.mokuro")
         os.replace(staged_cbz, target_dir / filename)
     finally:
@@ -98,9 +101,21 @@ def fix_published_titles(output_dir: Path) -> int:
 def unpublish_chapter(rel_path: str, output_dir: Path) -> None:
     series, filename = rel_path.split("/", 1)
     target_dir = output_dir / series
-    for name in (filename, f"{Path(filename).stem}.mokuro"):
+    stem = Path(filename).stem
+    for name in (filename, f"{stem}.mokuro"):
         (target_dir / name).unlink(missing_ok=True)
+    remove_covers(target_dir, stem)
     _remove_if_empty(target_dir)
+
+
+def remove_covers(target_dir: Path, stem: str) -> None:
+    """Delete the cover the reader uploaded next to a chapter.
+
+    The reader only generates a cover for a volume that has none, so one left over from
+    the previous .cbz would stay forever.
+    """
+    for ext in COVER_EXTENSIONS:
+        (target_dir / f"{stem}{ext}").unlink(missing_ok=True)
 
 
 def _remove_if_empty(directory: Path) -> None:

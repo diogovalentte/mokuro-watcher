@@ -6,7 +6,7 @@ from pathlib import Path
 from . import registry as reg
 from .config import Config
 from .library import list_cbz
-from .processor import with_series_title
+from .processor import remove_covers, with_series_title
 
 IMPORTED = "imported"
 REPLACED = "replaced"
@@ -101,21 +101,26 @@ def _import_one(
     tmp = target_dir / f".{name}.tmp"
     tmp.write_text(json.dumps(with_series_title(data, series), ensure_ascii=False), encoding="utf-8")
     os.replace(tmp, target_mokuro)
-    _link(library_cbz, target_dir / cbz_name)
+    if _link(library_cbz, target_dir / cbz_name):
+        remove_covers(target_dir, stem)
 
     stat = library_cbz.stat()
     registry.upsert(f"{series}/{cbz_name}", stat.st_mtime_ns, stat.st_size, reg.DONE)
     return ImportResult(name, REPLACED if replaced else IMPORTED)
 
 
-def _link(source: Path, target: Path) -> None:
-    """Point `target` at `source`'s inode, replacing whatever was there in one step."""
+def _link(source: Path, target: Path) -> bool:
+    """Point `target` at `source`'s inode, replacing whatever was there in one step.
+
+    Returns whether `target` changed.
+    """
     try:
         if target.stat().st_ino == source.stat().st_ino:
-            return
+            return False
     except FileNotFoundError:
         pass
     tmp = target.with_name(f".{target.name}.tmp")
     tmp.unlink(missing_ok=True)
     os.link(source, tmp)
     os.replace(tmp, target)
+    return True

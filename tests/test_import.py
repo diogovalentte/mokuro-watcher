@@ -91,12 +91,15 @@ def test_import_again_replaces(env):
     start(config, registry, library)
     make_cbz(library, "Raw/[0001]_Chapter_1.cbz", RAW)
     import_mokuro(config, registry, "Raw", [("[0001]_Chapter_1.mokuro", mokuro())])
+    cover = config.output_dir / "Raw/[0001]_Chapter_1.webp"
+    cover.write_bytes(b"cover")
 
     results = import_mokuro(
         config, registry, "Raw", [("[0001]_Chapter_1.mokuro", mokuro(pages=[{"blocks": [1]}]))]
     )
 
     assert [r.status for r in results] == [REPLACED]
+    assert cover.is_file()
     published = json.loads(
         (config.output_dir / "Raw/[0001]_Chapter_1.mokuro").read_text(encoding="utf-8")
     )
@@ -108,6 +111,8 @@ def test_import_relinks_a_published_cbz_from_an_old_download(env):
     start(config, registry, library)
     make_cbz(library, "Raw/[0001]_Chapter_1.cbz", RAW)
     import_mokuro(config, registry, "Raw", [("[0001]_Chapter_1.mokuro", mokuro())])
+    cover = config.output_dir / "Raw/[0001]_Chapter_1.jpg"
+    cover.write_bytes(b"old cover")
     (library / "Raw/[0001]_Chapter_1.cbz").unlink()
     make_cbz(library, "Raw/[0001]_Chapter_1.cbz", RAW)
 
@@ -116,6 +121,7 @@ def test_import_relinks_a_published_cbz_from_an_old_download(env):
     assert (config.output_dir / "Raw/[0001]_Chapter_1.cbz").stat().st_ino == (
         library / "Raw/[0001]_Chapter_1.cbz"
     ).stat().st_ino
+    assert not cover.exists()
 
 
 @pytest.mark.parametrize(

@@ -173,6 +173,7 @@ def test_removed_chapter_is_unpublished(env):
     sync_library(config, registry)
     process_pending(config, registry)
     (config.output_dir / "volume-data.json").write_text("{}")
+    (config.output_dir / "Raw/[0005]_Chapter_5.webp").write_bytes(b"cover")
 
     src.unlink()
     sync_library(config, registry)
@@ -188,6 +189,8 @@ def test_redownloaded_chapter_is_reprocessed(env):
     make_cbz(library, "Raw/[0006]_Chapter_6.cbz", RAW)
     sync_library(config, registry)
     process_pending(config, registry)
+    cover = config.output_dir / "Raw/[0006]_Chapter_6.webp"
+    cover.write_bytes(b"old cover")
 
     make_cbz(library, "Raw/[0006]_Chapter_6.cbz", RAW, mtime=OLD + 60)
     sync_library(config, registry)
@@ -195,6 +198,7 @@ def test_redownloaded_chapter_is_reprocessed(env):
     process_pending(config, registry)
     published = config.output_dir / "Raw/[0006]_Chapter_6.cbz"
     assert published.stat().st_ino == (library / "Raw/[0006]_Chapter_6.cbz").stat().st_ino
+    assert not cover.exists()
 
 
 def test_force_queues_backlog_raw_only(env):

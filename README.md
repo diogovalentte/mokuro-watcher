@@ -18,6 +18,7 @@ Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Ka
 - Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
 - `.cbz` apagado da biblioteca → o par publicado é apagado também.
 - Redownload (mtime/size mudou) → reprocessa.
+- Nos dois casos a capa (`<Cap>.webp`/`.jpg`) que o reader subiu ao lado do `.cbz` é apagada, porque ele só gera capa pra volume que não tem nenhuma; a nova sai quando o volume for baixado no reader. O mesmo vale pro import que troca o `.cbz` publicado.
 - **Rajada** numa série conhecida (`SERIES_BURST_THRESHOLD` capítulos novos ou alterados na mesma varredura, como quando a série é apagada e adicionada de novo no Kaizoku por outra source) → tratada como série nova: nada é processado até passar `SERIES_BASELINE_SECONDS` sem capítulo novo. Capítulo já publicado mantém o par antigo, que continua consistente porque o `.cbz` publicado ainda aponta pro arquivo antigo; só é despublicado se o arquivo foi sobrescrito no lugar (mesmo inode).
 
 Pastas começando com `.` na biblioteca são ignoradas.
