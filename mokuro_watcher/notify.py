@@ -19,4 +19,4 @@ def notify(url: str, topic: str, token: str, title: str, message: str) -> None:
         with urllib.request.urlopen(request, timeout=15):
             pass
     except OSError as e:
-        log.warning("falha ao avisar no ntfy: %s", e)
+        log.warning("failed to notify ntfy: %s", e)

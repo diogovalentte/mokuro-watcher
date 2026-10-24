@@ -1,37 +1,37 @@
 # mokuro-watcher
 
-Roda o [mokuro](https://github.com/kha-white/mokuro) nos capítulos raw que o Kaizoku baixa e publica o par `.cbz` + `.mokuro` numa pasta que o [mokuro-reader](https://github.com/diogovalentte/mokuro-reader) lê por WebDAV.
+Runs [mokuro](https://github.com/kha-white/mokuro) on the raw chapters Kaizoku downloads and publishes the `.cbz` + `.mokuro` pair to a folder that [mokuro-reader](https://github.com/diogovalentte/mokuro-reader) reads over WebDAV.
 
 ```
-/Medias/Mangas/<Série>/<Cap>.cbz            ← Kaizoku grava
-/Medias/Mangas/.mokuro-staging/...          ← mokuro roda aqui
-/Medias/Mangas/.mokuro-reader/<Série>/<Cap>.{cbz,mokuro}  ← servido pelo WebDAV
+/Medias/Mangas/<Series>/<Chapter>.cbz                         ← written by Kaizoku
+/Medias/Mangas/.mokuro-staging/...                            ← mokuro runs here
+/Medias/Mangas/.mokuro-reader/<Series>/<Chapter>.{cbz,mokuro} ← served over WebDAV
 ```
 
-## Como funciona
+## How it works
 
-- A cada `SCAN_INTERVAL_SECONDS` varre a biblioteca. Um `.cbz` entra na fila se estiver parado há `MIN_AGE_SECONDS` e se o `<Web>` do `ComicInfo.xml` for de um dos `SOURCES`.
-- Na **primeira execução** tudo o que já existe é registrado e ignorado: só capítulos baixados depois são processados.
-- **Série nova** na biblioteca: o download inicial é ignorado do mesmo jeito. Os capítulos que chegam são registrados sem processar até passar `SERIES_BASELINE_SECONDS` sem nenhum capítulo novo nela; daí em diante cada capítulo novo é processado. Pra processar o acervo inicial também, use `force`.
-- O mokuro tira o título da série da pasta onde o `.cbz` está, que no staging é a do capítulo. Antes de publicar, o `.mokuro` recebe `title` = nome da pasta da série e `title_uuid` = `uuid5` fixo desse nome, pra todos os capítulos caírem na mesma série no reader.
-- Um capítulo por vez. O `.cbz` publicado é um hardlink (não ocupa espaço); o `.mokuro` é movido antes do `.cbz`, então o reader nunca lista um volume sem OCR.
-- Falha: tenta de novo nas próximas varreduras; depois de `MAX_ATTEMPTS` desiste e avisa no ntfy.
-- `.cbz` apagado da biblioteca → o par publicado é apagado também.
-- Redownload (mtime/size mudou) → reprocessa.
-- Nos dois casos a capa (`<Cap>.webp`/`.jpg`) que o reader subiu ao lado do `.cbz` é apagada, porque ele só gera capa pra volume que não tem nenhuma; a nova sai quando o volume for baixado no reader. O mesmo vale pro import que troca o `.cbz` publicado.
-- **Rajada** numa série conhecida (`SERIES_BURST_THRESHOLD` capítulos novos ou alterados na mesma varredura, como quando a série é apagada e adicionada de novo no Kaizoku por outra source) → tratada como série nova: nada é processado até passar `SERIES_BASELINE_SECONDS` sem capítulo novo. Capítulo já publicado mantém o par antigo, que continua consistente porque o `.cbz` publicado ainda aponta pro arquivo antigo; só é despublicado se o arquivo foi sobrescrito no lugar (mesmo inode).
+- Every `SCAN_INTERVAL_SECONDS` it scans the library. A `.cbz` is queued once it has been untouched for `MIN_AGE_SECONDS` and the `<Web>` of its `ComicInfo.xml` belongs to one of the `SOURCES`.
+- On the **first run** everything that already exists is recorded and skipped: only chapters downloaded afterwards are processed.
+- **New series** in the library: its initial download is skipped the same way. Incoming chapters are recorded without processing until `SERIES_BASELINE_SECONDS` pass with no new chapter in it; from then on every new chapter is processed. To process the initial backlog too, use `force`.
+- mokuro takes the series title from the folder the `.cbz` is in, which in staging is the chapter's folder. Before publishing, the `.mokuro` gets `title` = the series folder name and `title_uuid` = a fixed `uuid5` of that name, so every chapter lands in the same series in the reader.
+- One chapter at a time. The published `.cbz` is a hardlink (takes no space); the `.mokuro` is moved before the `.cbz`, so the reader never lists a volume without OCR.
+- Failure: retried on the next scans; after `MAX_ATTEMPTS` it gives up and notifies on ntfy.
+- `.cbz` deleted from the library → the published pair is deleted too.
+- Redownload (mtime/size changed) → reprocessed.
+- In both cases the cover (`<Chapter>.webp`/`.jpg`) the reader uploaded next to the `.cbz` is deleted, because the reader only generates a cover for a volume that has none; the new one is made when the volume is downloaded in the reader. The same goes for an import that replaces the published `.cbz`.
+- **Burst** in a known series (`SERIES_BURST_THRESHOLD` new or changed chapters in the same scan, as when the series is deleted and added again in Kaizoku from another source) → treated as a new series: nothing is processed until `SERIES_BASELINE_SECONDS` pass with no new chapter. An already published chapter keeps its old pair, which stays consistent because the published `.cbz` still points to the old file; it is only unpublished if the file was overwritten in place (same inode).
 
-Pastas começando com `.` na biblioteca são ignoradas.
+Folders starting with `.` in the library are skipped.
 
-## Importar `.mokuro` gerados fora
+## Importing `.mokuro` files made elsewhere
 
-O acervo antigo de uma série nova não é processado aqui (horas de CPU). Dá pra rodar o mokuro numa máquina com GPU e importar só os `.mokuro`:
+The old backlog of a new series isn't processed here (hours of CPU). You can run mokuro on a machine with a GPU and import just the `.mokuro` files:
 
-- cada arquivo precisa ter o nome de um `.cbz` que já está em `$LIBRARY_DIR/<Série>/` (`[0001]_Chapter_1.mokuro` ↔ `[0001]_Chapter_1.cbz`); o resto é recusado, arquivo por arquivo;
-- recebe o mesmo `title`/`title_uuid` dos capítulos processados aqui, é publicado na mesma ordem (`.mokuro`, depois o hardlink do `.cbz`) e o capítulo fica `done` no registro, então apagar ou baixar de novo funciona como em qualquer outro;
-- capítulo já publicado tem o `.mokuro` substituído; capítulo na fila sai dela.
+- each file must be named after a `.cbz` already in `$LIBRARY_DIR/<Series>/` (`[0001]_Chapter_1.mokuro` ↔ `[0001]_Chapter_1.cbz`); anything else is rejected, file by file;
+- it gets the same `title`/`title_uuid` as chapters processed here, is published in the same order (`.mokuro`, then the `.cbz` hardlink) and the chapter is marked `done` in the registry, so deleting or redownloading it works like any other;
+- an already published chapter has its `.mokuro` replaced; a queued chapter leaves the queue.
 
-Pela API (é o que a página Mokuro do [valentium](https://github.com/diogovalentte/valentium) usa), ligada em `API_PORT` só no comando `run`, sem autenticação:
+Through the API (used by the Mokuro page of [valentium](https://github.com/diogovalentte/valentium)), bound to `API_PORT` only by the `run` command, with no authentication:
 
 ```
 GET  /series   → {"series": [{"name", "chapters", "published"}]}
@@ -39,9 +39,9 @@ POST /import   {"series": "...", "files": [{"name": "x.mokuro", "content": "<jso
                → {"results": [{"name", "status": "imported|replaced|rejected", "detail"}]}
 ```
 
-## Configuração
+## Configuration
 
-| Variável | Padrão |
+| Variable | Default |
 |---|---|
 | `LIBRARY_DIR` | `/Medias/Mangas` |
 | `OUTPUT_DIR` | `$LIBRARY_DIR/.mokuro-reader` |
@@ -54,31 +54,31 @@ POST /import   {"series": "...", "files": [{"name": "x.mokuro", "content": "<jso
 | `SERIES_BURST_THRESHOLD` | `5` |
 | `MAX_ATTEMPTS` | `3` |
 | `MOKURO_TIMEOUT_SECONDS` | `7200` |
-| `NTFY_ADDRESS`, `NTFY_TOPIC`, `NTFY_TOKEN` | vazio (sem aviso) |
-| `API_PORT` | `8000` (vazio ou `0` desliga) |
+| `NTFY_ADDRESS`, `NTFY_TOPIC`, `NTFY_TOKEN` | empty (no notifications) |
+| `API_PORT` | `8000` (empty or `0` disables it) |
 
-`OUTPUT_DIR` e `STAGING_DIR` precisam estar no mesmo filesystem da biblioteca (hardlink).
+`OUTPUT_DIR` and `STAGING_DIR` must be on the same filesystem as the library (hardlinks).
 
-Volumes: `/cache` guarda os modelos do OCR (~900 MB, baixados na primeira execução), `/state` guarda o registro.
+Volumes: `/cache` holds the OCR models (~900 MB, downloaded on the first run), `/state` holds the registry.
 
-## Comandos
+## Commands
 
 ```bash
-mokuro-watcher run            # loop (padrão)
-mokuro-watcher once           # uma varredura e sai
-mokuro-watcher force <Série>  # enfileira o acervo antigo de uma série (e encerra a janela de série nova)
-mokuro-watcher fix-titles     # corrige título/title_uuid dos .mokuro já publicados (idempotente)
-mokuro-watcher import <Série> <pasta>  # publica os .mokuro da pasta (ver acima)
+mokuro-watcher run              # loop (default)
+mokuro-watcher once             # scan once and exit
+mokuro-watcher force <Series>   # queue a series' old backlog (and close its new-series window)
+mokuro-watcher fix-titles       # fix title/title_uuid of the already published .mokuro files (idempotent)
+mokuro-watcher import <Series> <folder>  # publish the folder's .mokuro files (see above)
 ```
 
-Dentro do container: `docker exec mokuro-watcher mokuro-watcher force Skip_to_Loafer`.
+Inside the container: `docker exec mokuro-watcher mokuro-watcher force Skip_to_Loafer`.
 
-## Testes
+## Tests
 
 ```bash
 uvx --python 3.11 --with pytest pytest -q
 ```
 
-## Publicação
+## Release
 
-Push de tag → testes → imagem `ghcr.io/diogovalentte/mokuro-watcher:{tag,latest}` → webhook de redeploy da stack `mokuro-watcher` no Portainer.
+Tag push → tests → image `ghcr.io/diogovalentte/mokuro-watcher:{tag,latest}` → redeploy webhook of the `mokuro-watcher` stack in Portainer.

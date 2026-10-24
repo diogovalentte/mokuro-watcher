@@ -64,10 +64,10 @@ def to_dict(item: ImportResult | SeriesSummary) -> dict:
 
 def _series_dir(config: Config, series: str) -> Path:
     if not series or series.startswith(".") or "/" in series or "\\" in series:
-        raise InvalidImport(f"nome de série inválido: {series!r}")
+        raise InvalidImport(f"invalid series name: {series!r}")
     series_dir = config.library_dir / series
     if not series_dir.is_dir():
-        raise InvalidImport(f"série não encontrada na biblioteca: {series}")
+        raise InvalidImport(f"series not found in the library: {series}")
     return series_dir
 
 
@@ -80,18 +80,18 @@ def _import_one(
     content: bytes,
 ) -> ImportResult:
     if Path(name).name != name or "\\" in name or not name.endswith(".mokuro"):
-        return ImportResult(name, REJECTED, "não é um arquivo .mokuro")
+        return ImportResult(name, REJECTED, "not a .mokuro file")
     stem = name[: -len(".mokuro")]
     cbz_name = f"{stem}.cbz"
     library_cbz = series_dir / cbz_name
     if not library_cbz.is_file():
-        return ImportResult(name, REJECTED, f"{cbz_name} não existe na biblioteca")
+        return ImportResult(name, REJECTED, f"{cbz_name} does not exist in the library")
     try:
         data = json.loads(content)
     except (UnicodeDecodeError, json.JSONDecodeError):
-        return ImportResult(name, REJECTED, "JSON inválido")
+        return ImportResult(name, REJECTED, "invalid JSON")
     if not isinstance(data, dict) or not isinstance(data.get("pages"), list):
-        return ImportResult(name, REJECTED, "não parece um .mokuro (sem a lista pages)")
+        return ImportResult(name, REJECTED, "does not look like a .mokuro (no pages list)")
 
     target_dir = config.output_dir / series
     target_dir.mkdir(parents=True, exist_ok=True)

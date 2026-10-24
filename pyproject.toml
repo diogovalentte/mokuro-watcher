@@ -1,7 +1,7 @@
 [project]
 name = "mokuro-watcher"
 version = "0.1.0"
-description = "Roda o mokuro nos capítulos raw que o Kaizoku baixa e publica o resultado para o mokuro-reader"
+description = "Run mokuro on the raw chapters Kaizoku downloads and publish the result for mokuro-reader"
 requires-python = ">=3.11"
 
 [project.scripts]

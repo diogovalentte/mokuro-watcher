@@ -127,11 +127,11 @@ def test_import_relinks_a_published_cbz_from_an_old_download(env):
 @pytest.mark.parametrize(
     ("name", "content", "detail"),
     [
-        ("[0009]_Chapter_9.mokuro", mokuro(), "[0009]_Chapter_9.cbz não existe na biblioteca"),
-        ("[0001]_Chapter_1.json", mokuro(), "não é um arquivo .mokuro"),
-        ("../Raw/[0001]_Chapter_1.mokuro", mokuro(), "não é um arquivo .mokuro"),
-        ("[0001]_Chapter_1.mokuro", b"{not json", "JSON inválido"),
-        ("[0001]_Chapter_1.mokuro", b'{"title": "x"}', "não parece um .mokuro (sem a lista pages)"),
+        ("[0009]_Chapter_9.mokuro", mokuro(), "[0009]_Chapter_9.cbz does not exist in the library"),
+        ("[0001]_Chapter_1.json", mokuro(), "not a .mokuro file"),
+        ("../Raw/[0001]_Chapter_1.mokuro", mokuro(), "not a .mokuro file"),
+        ("[0001]_Chapter_1.mokuro", b"{not json", "invalid JSON"),
+        ("[0001]_Chapter_1.mokuro", b'{"title": "x"}', "does not look like a .mokuro (no pages list)"),
     ],
 )
 def test_import_rejects_one_file_without_failing_the_rest(env, name, content, detail):
@@ -213,7 +213,7 @@ def test_api_series_and_import(api):
         {
             "name": "[0002]_Chapter_2.mokuro",
             "status": REJECTED,
-            "detail": "[0002]_Chapter_2.cbz não existe na biblioteca",
+            "detail": "[0002]_Chapter_2.cbz does not exist in the library",
         },
     ]
     assert registry.get("生徒会にも穴はある！/[0001]_Chapter_1.cbz").status == reg.DONE
@@ -224,7 +224,7 @@ def test_api_rejects_bad_requests(api):
     start(config, registry, library)
     assert call(f"{base}/import", {"series": "Nope", "files": []}) == (
         400,
-        {"error": "série não encontrada na biblioteca: Nope"},
+        {"error": "series not found in the library: Nope"},
     )
     assert call(f"{base}/import", {"files": []})[0] == 400
     assert call(f"{base}/nope")[0] == 404

@@ -12,14 +12,14 @@ from .watcher import ensure_dirs, force_series, process_pending, run_forever, sy
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mokuro-watcher")
     sub = parser.add_subparsers(dest="command")
-    sub.add_parser("run", help="varre e processa em loop (padrão)")
-    sub.add_parser("once", help="uma varredura e sai")
-    force = sub.add_parser("force", help="enfileira os capítulos raw de uma série inteira")
-    force.add_argument("series", help="nome da pasta da série na biblioteca")
-    sub.add_parser("fix-titles", help="corrige título e title_uuid dos .mokuro já publicados")
-    imp = sub.add_parser("import", help="publica .mokuro gerados fora do watcher para uma série")
-    imp.add_argument("series", help="nome da pasta da série na biblioteca")
-    imp.add_argument("directory", type=Path, help="pasta com os arquivos .mokuro")
+    sub.add_parser("run", help="scan and process in a loop (default)")
+    sub.add_parser("once", help="scan once and exit")
+    force = sub.add_parser("force", help="queue every raw chapter of a series")
+    force.add_argument("series", help="name of the series folder in the library")
+    sub.add_parser("fix-titles", help="fix title and title_uuid of the already published .mokuro files")
+    imp = sub.add_parser("import", help="publish .mokuro files made outside the watcher for a series")
+    imp.add_argument("series", help="name of the series folder in the library")
+    imp.add_argument("directory", type=Path, help="folder with the .mokuro files")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -35,13 +35,13 @@ def main() -> None:
             raise SystemExit(str(e)) from e
         for r in results:
             print(f"{r.status:9} {r.name} {r.detail}".rstrip())
-        print(f"{sum(r.status != 'rejected' for r in results)}/{len(results)} publicados")
+        print(f"{sum(r.status != 'rejected' for r in results)}/{len(results)} published")
     elif args.command == "fix-titles":
         changed = fix_published_titles(config.output_dir)
-        print(f"{changed} arquivos .mokuro corrigidos")
+        print(f"{changed} .mokuro files fixed")
     elif args.command == "force":
         queued = force_series(config, registry, args.series)
-        print(f"{queued} capítulos enfileirados; o loop processa na próxima varredura")
+        print(f"{queued} chapters queued; the loop processes them on the next scan")
     elif args.command == "once":
         sync_library(config, registry)
         process_pending(config, registry)

@@ -47,11 +47,11 @@ def process_chapter(
                 timeout=timeout_seconds,
             )
         except subprocess.TimeoutExpired as e:
-            raise ProcessingError(f"mokuro passou de {timeout_seconds}s") from e
+            raise ProcessingError(f"mokuro took longer than {timeout_seconds}s") from e
         staged_mokuro = work_dir / f"{stem}.mokuro"
         if result.returncode != 0 or not staged_mokuro.is_file():
             output = (result.stderr or result.stdout or "").strip()
-            raise ProcessingError(f"mokuro saiu com {result.returncode}: {output[-1500:]}")
+            raise ProcessingError(f"mokuro exited with {result.returncode}: {output[-1500:]}")
         set_series_title(staged_mokuro, series)
 
         target_dir = output_dir / series

@@ -28,22 +28,22 @@ def make_server(config: Config, port: int, host: str = "0.0.0.0") -> ThreadingHT
             elif self.path == "/series":
                 self._send(HTTPStatus.OK, {"series": [to_dict(s) for s in list_series(config)]})
             else:
-                self._send(HTTPStatus.NOT_FOUND, {"error": "rota não encontrada"})
+                self._send(HTTPStatus.NOT_FOUND, {"error": "route not found"})
 
         def do_POST(self) -> None:
             if self.path != "/import":
-                self._send(HTTPStatus.NOT_FOUND, {"error": "rota não encontrada"})
+                self._send(HTTPStatus.NOT_FOUND, {"error": "route not found"})
                 return
             length = int(self.headers.get("Content-Length") or 0)
             if length > MAX_BODY_BYTES:
-                self._send(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "corpo grande demais"})
+                self._send(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "body too large"})
                 return
             try:
                 body = json.loads(self.rfile.read(length))
                 series = body["series"]
                 files = [(f["name"], f["content"].encode("utf-8")) for f in body["files"]]
             except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
-                self._send(HTTPStatus.BAD_REQUEST, {"error": "corpo inválido"})
+                self._send(HTTPStatus.BAD_REQUEST, {"error": "invalid body"})
                 return
             # sqlite connections can't cross threads, and each request runs in its own.
             registry = Registry(config.state_db)
@@ -57,7 +57,7 @@ def make_server(config: Config, port: int, host: str = "0.0.0.0") -> ThreadingHT
             log.info(
                 "import %s: %s",
                 series,
-                ", ".join(f"{r.name}={r.status}" for r in results) or "nenhum arquivo",
+                ", ".join(f"{r.name}={r.status}" for r in results) or "no files",
             )
             self._send(HTTPStatus.OK, {"results": [to_dict(r) for r in results]})
 

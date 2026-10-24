@@ -41,7 +41,7 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
             series_until[series] = now + config.series_baseline_seconds if is_new else 0
             registry.set_series_baseline(series, series_until[series])
             if is_new:
-                log.info("série nova: %s, download inicial ignorado", series)
+                log.info("new series: %s, initial download skipped", series)
         series_baseline = series_until[series] > now
 
         known = registry.get(file.path)
@@ -67,14 +67,14 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
                 unpublish_chapter(file.path, config.output_dir)
         registry.upsert(file.path, file.mtime_ns, file.size, status)
         if status == reg.PENDING:
-            log.info("capítulo novo: %s", file.path)
+            log.info("new chapter: %s", file.path)
 
     for chapter in registry.all():
         if chapter.path in present:
             continue
         if chapter.status == reg.DONE:
             unpublish_chapter(chapter.path, config.output_dir)
-            log.info("capítulo removido da biblioteca, despublicado: %s", chapter.path)
+            log.info("chapter removed from the library, unpublished: %s", chapter.path)
         registry.delete(chapter.path)
 
     present_series = {path.split("/", 1)[0] for path in present}
@@ -84,7 +84,7 @@ def sync_library(config: Config, registry: reg.Registry, now: float | None = Non
 
     if baseline:
         registry.mark_baseline_done()
-        log.info("linha de base registrada: %d capítulos existentes ignorados", len(files))
+        log.info("baseline recorded: %d existing chapters skipped", len(files))
 
 
 def _open_burst_windows(
@@ -113,7 +113,7 @@ def _open_burst_windows(
         if count >= config.series_burst_threshold:
             series_until[series] = now + config.series_baseline_seconds
             registry.set_series_baseline(series, series_until[series])
-            log.info("rajada em %s: %d capítulos, tratada como download inicial", series, count)
+            log.info("burst in %s: %d chapters, treated as an initial download", series, count)
 
 
 def _published_pair_intact(config: Config, rel_path: str) -> bool:
@@ -145,7 +145,7 @@ def process_pending(config: Config, registry: reg.Registry, now: float | None = 
         current = registry.get(chapter.path)
         if current is None or current.status != reg.PENDING:
             continue  # imported through the API while earlier chapters were processing
-        log.info("processando %s", chapter.path)
+        log.info("processing %s", chapter.path)
         started = time.monotonic()
         try:
             process_chapter(
@@ -158,19 +158,19 @@ def process_pending(config: Config, registry: reg.Registry, now: float | None = 
             )
         except (ProcessingError, OSError) as e:
             failed = registry.record_failure(chapter.path, str(e), config.max_attempts)
-            log.error("falha em %s (tentativa %d): %s", chapter.path, failed.attempts, e)
+            log.error("failed %s (attempt %d): %s", chapter.path, failed.attempts, e)
             if failed.status == reg.FAILED:
                 notify(
                     config.ntfy_url,
                     config.ntfy_topic,
                     config.ntfy_token,
-                    "mokuro-watcher: capítulo falhou",
-                    f"{chapter.path} falhou {failed.attempts} vezes: {str(e)[-500:]}",
+                    "mokuro-watcher: chapter failed",
+                    f"{chapter.path} failed {failed.attempts} times: {str(e)[-500:]}",
                 )
             continue
         registry.set_status(chapter.path, reg.DONE)
         processed += 1
-        log.info("publicado %s em %.0fs", chapter.path, time.monotonic() - started)
+        log.info("published %s in %.0fs", chapter.path, time.monotonic() - started)
     return processed
 
 
@@ -181,7 +181,7 @@ def force_series(config: Config, registry: reg.Registry, series: str) -> int:
     """
     series_dir = config.library_dir / series
     if not series_dir.is_dir():
-        raise SystemExit(f"série não encontrada: {series_dir}")
+        raise SystemExit(f"series not found: {series_dir}")
     registry.set_series_baseline(series, 0)
     queued = 0
     for file in list_cbz(config.library_dir):
@@ -197,13 +197,13 @@ def force_series(config: Config, registry: reg.Registry, series: str) -> int:
 def run_forever(config: Config, registry: reg.Registry) -> None:
     if config.api_port:
         start_api(config, config.api_port)
-        log.info("API ouvindo na porta %d", config.api_port)
+        log.info("API listening on port %d", config.api_port)
     while True:
         try:
             sync_library(config, registry)
             process_pending(config, registry)
         except Exception:
-            log.exception("erro na varredura")
+            log.exception("scan failed")
         time.sleep(config.scan_interval_seconds)
 
 
